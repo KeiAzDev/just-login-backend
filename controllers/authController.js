@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs'
-import User from '../models/userModel'
-import { generateToken } from '../config/auth'
+import User from '../models/userModel.js'
+import { generateToken } from '../config/auth.js'
 
 export const registerUser = async (req, res) => {
     const { username, email, password } = req.body;
