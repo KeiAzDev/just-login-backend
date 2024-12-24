@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import User from '../models/userModel.js';
-import { generateToken } from '../config/auth.js'; // JWT生成関数を想定
+import { generateToken } from '../config/auth.js'; // generateTokenはアクセストークンを作成する関数
+import jwt from 'jsonwebtoken';
 
 export const registerUser = async (req, res) => {
   const { username, email, password } = req.body;
@@ -20,37 +21,33 @@ export const registerUser = async (req, res) => {
 export const loginUser = async (req, res) => {
   const { username, email, password } = req.body;
 
-  // ユーザーをusernameまたはemailで検索
   const user = await User.findOne({ $or: [{ username }, { email }] });
   if (!user) {
     return res.status(400).json({ message: 'User not found' });
   }
 
-  // パスワードの確認
   const isPasswordCorrect = await bcrypt.compare(password, user.password);
   if (!isPasswordCorrect) {
     return res.status(400).json({ message: 'Invalid password' });
   }
 
-  // アクセストークンとリフレッシュトークンを生成
-  const token = generateToken(user._id, '15m'); // アクセストークン有効期限15分
-  const refreshToken = generateToken(user._id, '30d'); // リフレッシュトークン有効期限30日
+  const accessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '15m' });
+  const refreshToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
-  // トークンをクッキーに設定
-  res.cookie('token', token, { 
-    httpOnly: true, 
-    secure: process.env.NODE_ENV === 'production', 
+  // アクセストークンとリフレッシュトークンをクッキーに保存
+  res.cookie('token', accessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
     maxAge: 15 * 60 * 1000, // 15分
-    sameSite: 'strict' 
+    sameSite: 'strict',
   });
 
-  res.cookie('refreshToken', refreshToken, { 
-    httpOnly: true, 
-    secure: process.env.NODE_ENV === 'production', 
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30日
-    sameSite: 'strict' 
+    sameSite: 'strict',
   });
 
-  // レスポンスを送信
-  res.status(200).json({ message: 'Login successful', token });
+  res.status(200).json({ message: 'Login successful' });
 };
