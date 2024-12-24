@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import User from '../models/userModel.js';
-import { generateToken } from '../config/auth.js'; // generateTokenはアクセストークンを作成する関数
+import { generateToken } from '../config/auth.js';
 import jwt from 'jsonwebtoken';
 
 export const registerUser = async (req, res) => {
@@ -34,20 +34,104 @@ export const loginUser = async (req, res) => {
   const accessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '15m' });
   const refreshToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
-  // アクセストークンとリフレッシュトークンをクッキーに保存
   res.cookie('token', accessToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 15 * 60 * 1000, // 15分
+    maxAge: 15 * 60 * 1000,
     sameSite: 'strict',
   });
 
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30日
+    maxAge: 30 * 24 * 60 * 60 * 1000,
     sameSite: 'strict',
   });
 
   res.status(200).json({ message: 'Login successful' });
+};
+
+export const getCurrentUser = async (req, res) => {
+  try {
+    const token = req.cookies.token;
+    if (!token) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    res.status(401).json({ message: 'Token is invalid or expired' });
+  }
+};
+
+export const logoutUser = async (req, res) => {
+  res.clearCookie('token');
+  res.clearCookie('refreshToken');
+  res.status(200).json({ message: 'Logged out successfully' });
+};
+
+export const refreshToken = async (req, res) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    if (!refreshToken) {
+      return res.status(401).json({ message: 'Refresh token not found' });
+    }
+
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    const newAccessToken = jwt.sign({ id: decoded.id }, process.env.JWT_SECRET, { expiresIn: '15m' });
+
+    res.cookie('token', newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 15 * 60 * 1000,
+      sameSite: 'strict',
+    });
+
+    res.json({ message: 'Token refreshed successfully' });
+  } catch (error) {
+    res.status(401).json({ message: 'Refresh token is invalid or expired' });
+  }
+};
+
+export const isAuthenticated = async (req, res) => {
+  try {
+    const token = req.cookies.token;
+    if (!token) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET);
+    res.json({ authenticated: true });
+  } catch (error) {
+    res.json({ authenticated: false });
+  }
+};
+
+export const home = async (req, res) => {
+  try {
+    const token = req.cookies.token;
+    if (!token) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id).select('-password');
+    
+    res.json({
+      message: 'Welcome to the homepage',
+      user: {
+        username: user.username,
+        email: user.email
+      }
+    });
+  } catch (error) {
+    res.status(401).json({ message: 'Not authorized' });
+  }
 };
