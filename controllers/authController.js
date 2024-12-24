@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import User from '../models/userModel.js';
-import { generateToken } from '../config/auth.js';
+import { generateToken } from '../config/auth.js'; // JWT生成関数を想定
 
 export const registerUser = async (req, res) => {
   const { username, email, password } = req.body;
@@ -32,14 +32,22 @@ export const loginUser = async (req, res) => {
     return res.status(400).json({ message: 'Invalid password' });
   }
 
-  // JWTトークンを生成
-  const token = generateToken(user._id);
+  // アクセストークンとリフレッシュトークンを生成
+  const token = generateToken(user._id, '15m'); // アクセストークン有効期限15分
+  const refreshToken = generateToken(user._id, '30d'); // リフレッシュトークン有効期限30日
 
   // トークンをクッキーに設定
   res.cookie('token', token, { 
     httpOnly: true, 
     secure: process.env.NODE_ENV === 'production', 
-    maxAge: 1 * 60 * 60 * 1000, 
+    maxAge: 15 * 60 * 1000, // 15分
+    sameSite: 'strict' 
+  });
+
+  res.cookie('refreshToken', refreshToken, { 
+    httpOnly: true, 
+    secure: process.env.NODE_ENV === 'production', 
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30日
     sameSite: 'strict' 
   });
 
